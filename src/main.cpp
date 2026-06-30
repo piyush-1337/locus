@@ -8,15 +8,6 @@
 #include <sys/socket.h>
 #include <vector>
 
-void print_usage() {
-  std::println(stderr, "{}", R"(
-Usage: locus [OPTIONS]
-Options:
-  --server <IP>    Specify the target DNS server IPv4 address (e.g., 8.8.8.8)
-  --domain <NAME>  The domain name to resolve (e.g., example.com)
-                 )");
-}
-
 int main(int argc, char *argv[]) {
   if (argc < 5) {
     std::println(stderr, "Error: Missing required arguments.");
@@ -93,6 +84,28 @@ int main(int argc, char *argv[]) {
   reply_header.ancount = read_uint16(response, offset);
   reply_header.nscount = read_uint16(response, offset);
   reply_header.arcount = read_uint16(response, offset);
+
+  int response_code = reply_header.flags & 0x0F;
+  if (reply_header.ancount == 0 || response_code == 3) {
+    std::println(stderr, "no ip address found/doesn't exist for: {}", domain_name);
+    return 1;
+  }
+
+  if (response_code != 0) {
+    std::println(stderr, "query not successful");
+    return 1;
+  }
+
+  // server just responds back the original query
+  offset = query.size() + 10;
+  
+  uint16_t data_length = read_uint16(response, offset);
+  if (data_length != 4) {
+    std::println(stderr, "not ipv4 addr");
+    return 1;
+  }
+
+  std::println("resolved ip address: {}.{}.{}.{}", response[offset], response[offset+1], response[offset+2], response[offset+3]);
 
   return 0;
 }

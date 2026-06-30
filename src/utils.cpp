@@ -1,6 +1,7 @@
-#include <cstdint>
-#include <vector>
 #include "utils.hpp"
+#include <cstdint>
+#include <print>
+#include <vector>
 
 uint16_t read_uint16(const std::vector<uint8_t> &buffer, size_t &offset) {
   uint16_t value =
@@ -16,4 +17,13 @@ uint32_t read_uint32(const std::vector<uint8_t> &buffer, size_t &offset) {
                    buffer[offset + 3];
   offset += 4;
   return value;
+}
+
+void print_usage() {
+  std::println(stderr, "{}", R"(
+Usage: locus [OPTIONS]
+Options:
+  --server <IP>    Specify the target DNS server IPv4 address (e.g., 8.8.8.8)
+  --domain <NAME>  The domain name to resolve (e.g., example.com)
+                 )");
 }

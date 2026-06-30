@@ -4,11 +4,17 @@
 #include <vector>
 
 struct DnsHeader {
+  /* unique id for this transaction */
   uint16_t id;
+  /* flags and codes */
   uint16_t flags;
+  /* number of question count (query domain count) */
   uint16_t qdcount;
+  /* answer count */
   uint16_t ancount;
+  /* name server count */
   uint16_t nscount;
+  /* additional record count */
   uint16_t arcount;
 
   std::vector<uint8_t> serialize() const {
