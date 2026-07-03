@@ -97,7 +97,8 @@ int main(int argc, char *argv[]) {
   }
 
   // server just responds back the original query
-  offset = query.size() + 10;
+  offset = query.size();
+  offset += 10;
   
   uint16_t data_length = read_uint16(response, offset);
   if (data_length != 4) {
