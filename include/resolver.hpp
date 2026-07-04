@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
+#include "ip.hpp"
 #include <netinet/in.h>
 #include <optional>
 #include <string_view>
-#include <vector>
 
 class DnsClient {
 public:
@@ -18,7 +17,7 @@ public:
   DnsClient(DnsClient&& other) noexcept;
   DnsClient& operator=(DnsClient&& other) noexcept;
 
-  std::optional<std::vector<uint8_t>> resolve(std::string_view domain_name);
+  std::optional<Ipv4Adrr> resolve(std::string_view domain_name);
 
 private:
   explicit DnsClient(int socket_fd, sockaddr_in addr);

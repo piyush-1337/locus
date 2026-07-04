@@ -1,5 +1,6 @@
 #include "resolver.hpp"
 #include "dns_header.hpp"
+#include "ip.hpp"
 #include "query.hpp"
 #include "utils.hpp"
 #include <arpa/inet.h>
@@ -28,8 +29,7 @@ std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
   return DnsClient(sock, server_addr);
 }
 
-std::optional<std::vector<uint8_t>>
-DnsClient::resolve(std::string_view domain_name) {
+std::optional<Ipv4Adrr> DnsClient::resolve(std::string_view domain_name) {
 
   std::vector<uint8_t> query = build_query(domain_name);
 
@@ -85,8 +85,12 @@ DnsClient::resolve(std::string_view domain_name) {
     return std::nullopt;
   }
 
-  return std::vector<uint8_t>{response[offset], response[offset + 1],
-                              response[offset + 2], response[offset + 3]};
+  return Ipv4Adrr{{
+      response[offset],
+      response[offset + 1],
+      response[offset + 2],
+      response[offset + 3],
+  }};
 }
 
 DnsClient::DnsClient(int socket_fd, sockaddr_in addr)
