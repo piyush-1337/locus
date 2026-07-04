@@ -11,6 +11,7 @@ set(SOURCES
     src/main.cpp
     src/query.cpp
     src/utils.cpp
+    src/cli.cpp
 )
 
 add_executable(locus ${SOURCES})
