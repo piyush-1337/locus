@@ -12,6 +12,7 @@ set(SOURCES
     src/query.cpp
     src/utils.cpp
     src/cli.cpp
+    src/resolver.cpp
 )
 
 add_executable(locus ${SOURCES})
