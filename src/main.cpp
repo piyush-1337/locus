@@ -1,45 +1,21 @@
+#include "cli.hpp"
 #include "dns_header.hpp"
 #include "query.hpp"
 #include "utils.hpp"
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <print>
-#include <string_view>
 #include <sys/socket.h>
 #include <vector>
 
 int main(int argc, char *argv[]) {
-  if (argc < 5) {
-    std::println(stderr, "Error: Missing required arguments.");
-    print_usage();
+
+  auto cli = cli::parse(argc, argv);
+  if (!cli.has_value()) {
     return 1;
   }
 
-  std::string_view server_ip{};
-  std::string_view domain_name{};
-
-  for (int i{1}; i < argc; i++) {
-    std::string_view arg{argv[i]};
-
-    if (arg == "--server") {
-      server_ip = argv[i + 1];
-      i++;
-    } else if (arg == "--domain") {
-      domain_name = argv[i + 1];
-      i++;
-    } else {
-      std::println(stderr, "Error: Unknown argument '{}'", arg);
-      print_usage();
-      return 1;
-    }
-  }
-  if (server_ip.empty() || domain_name.empty()) {
-    std::println(stderr, "Error: Missing required arguments.");
-    print_usage();
-    return 1;
-  }
-
-  std::vector<uint8_t> query = build_query(domain_name);
+  std::vector<uint8_t> query = build_query(cli->domain_name);
 
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock == -1) {
@@ -51,7 +27,7 @@ int main(int argc, char *argv[]) {
   server_addr.sin_port = htons(53);
   server_addr.sin_family = AF_INET;
 
-  std::string ip_str{server_ip};
+  std::string ip_str{cli->server_ip};
 
   if (inet_pton(AF_INET, ip_str.c_str(), &server_addr.sin_addr) <= 0) {
     std::println(stderr, "Error: invalid ip address");
@@ -87,7 +63,8 @@ int main(int argc, char *argv[]) {
 
   int response_code = reply_header.flags & 0x0F;
   if (reply_header.ancount == 0 || response_code == 3) {
-    std::println(stderr, "no ip address found/doesn't exist for: {}", domain_name);
+    std::println(stderr, "no ip address found/doesn't exist for: {}",
+                 cli->domain_name);
     return 1;
   }
 
@@ -99,14 +76,16 @@ int main(int argc, char *argv[]) {
   // server just responds back the original query
   offset = query.size();
   offset += 10;
-  
+
   uint16_t data_length = read_uint16(response, offset);
   if (data_length != 4) {
     std::println(stderr, "not ipv4 addr");
     return 1;
   }
 
-  std::println("resolved ip address: {}.{}.{}.{}", response[offset], response[offset+1], response[offset+2], response[offset+3]);
+  std::println("resolved ip address: {}.{}.{}.{}", response[offset],
+               response[offset + 1], response[offset + 2],
+               response[offset + 3]);
 
   return 0;
 }
