@@ -17,7 +17,7 @@ public:
   DnsClient(DnsClient&& other) noexcept;
   DnsClient& operator=(DnsClient&& other) noexcept;
 
-  std::optional<Ipv4Adrr> resolve(std::string_view domain_name);
+  std::optional<Ipv4Addr> resolve(std::string_view domain_name);
 
 private:
   explicit DnsClient(int socket_fd, sockaddr_in addr);

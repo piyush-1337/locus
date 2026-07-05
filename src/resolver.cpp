@@ -1,5 +1,6 @@
 #include "resolver.hpp"
 #include "dns_header.hpp"
+#include "dns_record.hpp"
 #include "ip.hpp"
 #include "query.hpp"
 #include "utils.hpp"
@@ -29,7 +30,7 @@ std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
   return DnsClient(sock, server_addr);
 }
 
-std::optional<Ipv4Adrr> DnsClient::resolve(std::string_view domain_name) {
+std::optional<Ipv4Addr> DnsClient::resolve(std::string_view domain_name) {
 
   std::vector<uint8_t> query = build_query(domain_name);
 
@@ -77,20 +78,49 @@ std::optional<Ipv4Adrr> DnsClient::resolve(std::string_view domain_name) {
 
   // server just responds back the original query
   offset = query.size();
-  offset += 10;
 
-  uint16_t data_length = read_uint16(response, offset);
-  if (data_length != 4) {
-    std::println(stderr, "not ipv4 addr");
-    return std::nullopt;
+  // answer section begins
+  int i = 0;
+  while (i < reply_header.ancount) {
+
+    // skip name
+    while (true) {
+      if (offset >= response.size())
+        break;
+      uint8_t byte = response[offset];
+      if (byte >= 0xC0) {
+        offset += 2;
+        break;
+      }
+      if (byte == 0) {
+        offset += 1;
+        break;
+      }
+      offset += 1 + byte;
+    }
+
+    DnsRecordHeader record_header{
+        .type = read_uint16(response, offset),
+        .class_code = read_uint16(response, offset),
+        .ttl = read_uint32(response, offset),
+        .data_length = read_uint16(response, offset),
+    };
+
+    if (record_header.type == 1) {
+      return Ipv4Addr{{
+          response[offset],
+          response[offset + 1],
+          response[offset + 2],
+          response[offset + 3],
+      }};
+    }
+
+    // else we dont care, gimme ipv4
+    offset += record_header.data_length;
+
+    i++;
   }
-
-  return Ipv4Adrr{{
-      response[offset],
-      response[offset + 1],
-      response[offset + 2],
-      response[offset + 3],
-  }};
+  return std::nullopt;
 }
 
 DnsClient::DnsClient(int socket_fd, sockaddr_in addr)

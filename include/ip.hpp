@@ -5,7 +5,7 @@
 #include <format>
 #include <string>
 
-struct Ipv4Adrr {
+struct Ipv4Addr {
   std::array<uint8_t, 4> octets;
 
   std::string to_string() const {

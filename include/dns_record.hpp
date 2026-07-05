@@ -1,13 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
-#include <vector>
 
-struct DnsRecord {
-  std::string name;
+struct DnsRecordHeader {
   uint16_t type;
-  uint16_t record_class;
+  uint16_t class_code;
   uint32_t ttl;
-  std::vector<uint8_t> rdata;
+  uint16_t data_length;
 };

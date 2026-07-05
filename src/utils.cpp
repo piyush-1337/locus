@@ -2,6 +2,12 @@
 #include <cstdint>
 #include <vector>
 
+uint8_t read_uint8(const std::vector<uint8_t> &buffer, size_t &offset) {
+  uint8_t value = static_cast<uint8_t>(buffer[offset]);
+  offset++;
+  return value;
+}
+
 uint16_t read_uint16(const std::vector<uint8_t> &buffer, size_t &offset) {
   uint16_t value =
       (static_cast<uint16_t>(buffer[offset]) << 8) | buffer[offset + 1];
