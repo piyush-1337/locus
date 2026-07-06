@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils.hpp"
 #include <cstdint>
 #include <vector>
 
@@ -41,5 +42,15 @@ struct DnsHeader {
 
     return header;
   }
-};
 
+  static DnsHeader from_bytes(const std::vector<uint8_t> &response, size_t &offset) {
+    return DnsHeader{
+        .id = read_uint16(response, offset),
+        .flags = read_uint16(response, offset),
+        .qdcount = read_uint16(response, offset),
+        .ancount = read_uint16(response, offset),
+        .nscount = read_uint16(response, offset),
+        .arcount = read_uint16(response, offset),
+    };
+  }
+};

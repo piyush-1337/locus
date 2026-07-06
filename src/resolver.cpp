@@ -5,6 +5,7 @@
 #include "query.hpp"
 #include "utils.hpp"
 #include <arpa/inet.h>
+#include <cassert>
 #include <optional>
 #include <print>
 #include <string>
@@ -32,7 +33,73 @@ std::optional<DnsClient> DnsClient::create() {
 }
 
 std::optional<std::variant<Ipv4Addr, Ipv6Addr>>
-DnsClient::resolve(std::string_view domain_name) {}
+DnsClient::resolve(std::string_view domain_name) {
+  auto query = build_query(domain_name);
+
+  // query the root server
+  bool sent = send_packet(query);
+  if (!sent) {
+    return std::nullopt;
+  }
+
+  auto packet = receive_packet();
+  if (!packet) {
+    return std::nullopt;
+  }
+
+  auto response = *packet;
+  size_t offset = 0;
+
+  DnsHeader reply_header = DnsHeader::from_bytes(response, offset);
+
+  int response_code = reply_header.flags & 0x0F;
+  if (reply_header.ancount == 0 || response_code == 3) {
+    std::println(stderr, "no ip address found/doesn't exist for: {}",
+                 domain_name);
+    return std::nullopt;
+  }
+
+  if (response_code != 0) {
+    std::println(stderr, "query not successful");
+    return std::nullopt;
+  }
+
+  // skip the question section (echoed back)
+  offset = query.size();
+
+  // root server should have no answers
+  assert(reply_header.ancount == 0);
+
+  // skip the authority section (its just names(strings))
+  for (int i{}; i < reply_header.nscount; i++) {
+    skip_name(response, offset);
+
+    DnsRecordHeader record_header =
+        DnsRecordHeader::from_bytes(response, offset);
+
+    offset += record_header.data_length;
+  }
+
+  // root server should give namespace server ips in this section
+  assert(reply_header.arcount > 0);
+
+  // just get first namespace server ipv4
+  Ipv4Addr ipv4;
+  for (int i{}; i < reply_header.arcount; i++) {
+    DnsRecordHeader record_header = DnsRecordHeader::from_bytes(response, offset);
+
+    if (record_header.type == 1) {
+      // found the ipv4
+      ipv4 = Ipv4Addr {
+        response[offset],
+        response[offset+1],
+        response[offset+2],
+        response[offset+3],
+      };
+      break;
+    }
+  }
+}
 
 std::optional<DnsClient> DnsClient::create_old(std::string_view server_ip) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -71,13 +138,7 @@ DnsClient::resolve_old(std::string_view domain_name) {
   auto response = *packet;
   size_t offset = 0;
 
-  DnsHeader reply_header;
-  reply_header.id = read_uint16(response, offset);
-  reply_header.flags = read_uint16(response, offset);
-  reply_header.qdcount = read_uint16(response, offset);
-  reply_header.ancount = read_uint16(response, offset);
-  reply_header.nscount = read_uint16(response, offset);
-  reply_header.arcount = read_uint16(response, offset);
+  DnsHeader reply_header = DnsHeader::from_bytes(response, offset);
 
   int response_code = reply_header.flags & 0x0F;
   if (reply_header.ancount == 0 || response_code == 3) {
@@ -99,12 +160,8 @@ DnsClient::resolve_old(std::string_view domain_name) {
     // skip name
     skip_name(response, offset);
 
-    DnsRecordHeader record_header{
-        .type = read_uint16(response, offset),
-        .class_code = read_uint16(response, offset),
-        .ttl = read_uint32(response, offset),
-        .data_length = read_uint16(response, offset),
-    };
+    DnsRecordHeader record_header =
+        DnsRecordHeader::from_bytes(response, offset);
 
     if (record_header.type == 1) {
       return Ipv4Addr{{
