@@ -4,4 +4,4 @@
 #include <string_view>
 #include <vector>
 
-std::vector<uint8_t> build_query(std::string_view domain);
+std::vector<uint8_t> build_query(std::string_view domain, uint16_t qtype = 1);
