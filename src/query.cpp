@@ -38,9 +38,11 @@ std::vector<uint8_t> build_query(std::string_view domain) {
 
   query.push_back(static_cast<uint8_t>(0x00));
 
+  // Qtype (00, 01 for ipv4, 00, 1C for ipv6)
   query.push_back(static_cast<uint8_t>(0x00));
   query.push_back(static_cast<uint8_t>(0x01));
 
+  // Qclass
   query.push_back(static_cast<uint8_t>(0x00));
   query.push_back(static_cast<uint8_t>(0x01));
 

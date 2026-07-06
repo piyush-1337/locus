@@ -1,6 +1,7 @@
 #include "cli.hpp"
 #include "resolver.hpp"
 #include <print>
+#include <variant>
 
 int main(int argc, char *argv[]) {
 
@@ -19,7 +20,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  std::println("resolved ip: {}", payload->to_string());
+  std::visit(
+      [](const auto &ip) { std::println("resolved ip: {}", ip.to_string()); },
+      payload.value());
 
   return 0;
 }

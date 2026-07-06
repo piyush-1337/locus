@@ -10,6 +10,7 @@
 #include <string>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <variant>
 
 std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -30,7 +31,8 @@ std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
   return DnsClient(sock, server_addr);
 }
 
-std::optional<Ipv4Addr> DnsClient::resolve(std::string_view domain_name) {
+std::optional<std::variant<Ipv4Addr, Ipv6Addr>>
+DnsClient::resolve(std::string_view domain_name) {
 
   std::vector<uint8_t> query = build_query(domain_name);
 
@@ -80,9 +82,7 @@ std::optional<Ipv4Addr> DnsClient::resolve(std::string_view domain_name) {
   offset = query.size();
 
   // answer section begins
-  int i = 0;
-  while (i < reply_header.ancount) {
-
+  for (int i = 0; i < reply_header.ancount; i++) {
     // skip name
     while (true) {
       if (offset >= response.size())
@@ -113,13 +113,32 @@ std::optional<Ipv4Addr> DnsClient::resolve(std::string_view domain_name) {
           response[offset + 2],
           response[offset + 3],
       }};
+    } else if (record_header.type == 28) {
+      return Ipv6Addr{{
+          response[offset],
+          response[offset + 1],
+          response[offset + 2],
+          response[offset + 3],
+          response[offset + 4],
+          response[offset + 5],
+          response[offset + 6],
+          response[offset + 7],
+          response[offset + 8],
+          response[offset + 9],
+          response[offset + 10],
+          response[offset + 11],
+          response[offset + 12],
+          response[offset + 13],
+          response[offset + 14],
+          response[offset + 15],
+      }};
     }
 
-    // else we dont care, gimme ipv4
+    // else we dont care, gimme ipv4 | ipv6
     offset += record_header.data_length;
-
-    i++;
   }
+
+  std::println("ip not found, possibly parsing error");
   return std::nullopt;
 }
 
