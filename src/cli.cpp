@@ -1,26 +1,23 @@
 #include "cli.hpp"
 #include <optional>
 #include <print>
+#include <string_view>
 
 namespace cli {
-std::optional<CliConfig> parse(int argc, char *argv[]) {
+std::optional<std::string_view> parse(int argc, char *argv[]) {
 
-  if (argc < 5) {
+  if (argc < 3) {
     std::println(stderr, "Error: Missing required arguments.");
     print_usage();
     return std::nullopt;
   }
 
-  std::string_view server_ip{};
   std::string_view domain_name{};
 
   for (int i{1}; i < argc; i++) {
     std::string_view arg{argv[i]};
 
-    if (arg == "--server") {
-      server_ip = argv[i + 1];
-      i++;
-    } else if (arg == "--domain") {
+    if (arg == "--domain") {
       domain_name = argv[i + 1];
       i++;
     } else {
@@ -29,16 +26,14 @@ std::optional<CliConfig> parse(int argc, char *argv[]) {
       return std::nullopt;
     }
   }
-  if (server_ip.empty() || domain_name.empty()) {
+
+  if (domain_name.empty()) {
     std::println(stderr, "Error: Missing required arguments.");
     print_usage();
     return std::nullopt;
   }
 
-  return CliConfig{
-      .server_ip = server_ip,
-      .domain_name = domain_name,
-  };
+  return domain_name;
 }
 
 void print_usage() {

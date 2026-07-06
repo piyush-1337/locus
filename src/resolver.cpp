@@ -12,7 +12,29 @@
 #include <unistd.h>
 #include <variant>
 
-std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
+std::optional<DnsClient> DnsClient::create() {
+  int sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (sock == -1) {
+    return std::nullopt;
+  }
+
+  sockaddr_in server_addr{};
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(53);
+
+  std::string ip_str{"198.41.0.4"};
+  if (inet_pton(AF_INET, ip_str.c_str(), &server_addr.sin_addr) <= 0) {
+    close(sock);
+    return std::nullopt;
+  }
+
+  return DnsClient(sock, server_addr);
+}
+
+std::optional<std::variant<Ipv4Addr, Ipv6Addr>>
+DnsClient::resolve(std::string_view domain_name) {}
+
+std::optional<DnsClient> DnsClient::create_old(std::string_view server_ip) {
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (sock == -1) {
     return std::nullopt;
@@ -32,30 +54,21 @@ std::optional<DnsClient> DnsClient::create(std::string_view server_ip) {
 }
 
 std::optional<std::variant<Ipv4Addr, Ipv6Addr>>
-DnsClient::resolve(std::string_view domain_name) {
+DnsClient::resolve_old(std::string_view domain_name) {
 
   std::vector<uint8_t> query = build_query(domain_name);
 
-  ssize_t bytes_sent =
-      sendto(m_socket_fd, query.data(), query.size(), 0,
-             reinterpret_cast<const sockaddr *>(&m_server_addr),
-             sizeof(m_server_addr));
-
-  if (bytes_sent == -1 || bytes_sent != query.size()) {
-    std::println(stderr, "Error: coudn't send header through udp");
+  bool sent = send_packet(query);
+  if (!sent) {
     return std::nullopt;
   }
 
-  std::vector<uint8_t> response(512);
-  ssize_t bytes_received = recvfrom(m_socket_fd, response.data(),
-                                    response.size(), 0, nullptr, nullptr);
-
-  if (bytes_received == -1) {
-    std::println(stderr, "Error: coudn't receive through udp");
+  auto packet = receive_packet();
+  if (!packet) {
     return std::nullopt;
   }
 
-  response.resize(bytes_received);
+  auto response = *packet;
   size_t offset = 0;
 
   DnsHeader reply_header;
@@ -84,20 +97,7 @@ DnsClient::resolve(std::string_view domain_name) {
   // answer section begins
   for (int i = 0; i < reply_header.ancount; i++) {
     // skip name
-    while (true) {
-      if (offset >= response.size())
-        break;
-      uint8_t byte = response[offset];
-      if (byte >= 0xC0) {
-        offset += 2;
-        break;
-      }
-      if (byte == 0) {
-        offset += 1;
-        break;
-      }
-      offset += 1 + byte;
-    }
+    skip_name(response, offset);
 
     DnsRecordHeader record_header{
         .type = read_uint16(response, offset),
@@ -140,6 +140,34 @@ DnsClient::resolve(std::string_view domain_name) {
 
   std::println("ip not found, possibly parsing error");
   return std::nullopt;
+}
+
+bool DnsClient::send_packet(const std::vector<uint8_t> &packet) {
+  ssize_t bytes_sent =
+      sendto(m_socket_fd, packet.data(), packet.size(), 0,
+             reinterpret_cast<const sockaddr *>(&m_server_addr),
+             sizeof(m_server_addr));
+
+  if (bytes_sent == -1 || bytes_sent != packet.size()) {
+    std::println(stderr, "Error: coudn't send header through udp");
+    return false;
+  }
+
+  return true;
+}
+
+std::optional<std::vector<uint8_t>> DnsClient::receive_packet() {
+  std::vector<uint8_t> response(512);
+  ssize_t bytes_received = recvfrom(m_socket_fd, response.data(),
+                                    response.size(), 0, nullptr, nullptr);
+
+  if (bytes_received == -1) {
+    std::println(stderr, "Error: coudn't receive through udp");
+    return std::nullopt;
+  }
+  response.resize(bytes_received);
+
+  return response;
 }
 
 DnsClient::DnsClient(int socket_fd, sockaddr_in addr)

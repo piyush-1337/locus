@@ -23,3 +23,20 @@ uint32_t read_uint32(const std::vector<uint8_t> &buffer, size_t &offset) {
   offset += 4;
   return value;
 }
+
+void skip_name(const std::vector<uint8_t> &response, size_t &offset) {
+  while (true) {
+    if (offset >= response.size())
+      break;
+    uint8_t byte = response[offset];
+    if (byte >= 0xC0) {
+      offset += 2;
+      break;
+    }
+    if (byte == 0) {
+      offset += 1;
+      break;
+    }
+    offset += 1 + byte;
+  }
+}

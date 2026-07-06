@@ -1,28 +1,17 @@
 #include "cli.hpp"
 #include "resolver.hpp"
-#include <print>
-#include <variant>
 
 int main(int argc, char *argv[]) {
 
-  auto cli = cli::parse(argc, argv);
-  if (!cli) {
+  auto domain_name = cli::parse(argc, argv);
+  if (!domain_name) {
     return 1;
   }
 
-  auto client = DnsClient::create(cli->server_ip);
+  auto client = DnsClient::create();
   if (!client) {
     return 1;
   }
-
-  auto payload = client->resolve(cli->domain_name);
-  if (!payload) {
-    return 1;
-  }
-
-  std::visit(
-      [](const auto &ip) { std::println("resolved ip: {}", ip.to_string()); },
-      payload.value());
 
   return 0;
 }
