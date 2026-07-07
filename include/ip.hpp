@@ -12,6 +12,14 @@ struct Ipv4Addr {
     return std::format("{}.{}.{}.{}", octets[0], octets[1], octets[2],
                        octets[3]);
   }
+
+  uint32_t raw() const {
+    uint32_t value = (static_cast<uint32_t>(octets[0]) << 24) |
+                     (static_cast<uint32_t>(octets[1]) << 16) |
+                     (static_cast<uint32_t>(octets[2]) << 8) |
+                     (static_cast<uint32_t>(octets[3]));
+    return value;
+  }
 };
 
 struct Ipv6Addr {

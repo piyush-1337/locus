@@ -6,6 +6,7 @@
 #include "utils.hpp"
 #include <arpa/inet.h>
 #include <cassert>
+#include <netinet/in.h>
 #include <optional>
 #include <print>
 #include <string>
@@ -35,70 +36,110 @@ std::optional<DnsClient> DnsClient::create() {
 std::optional<std::variant<Ipv4Addr, Ipv6Addr>>
 DnsClient::resolve(std::string_view domain_name) {
   auto query = build_query(domain_name);
+  int max_hops = 30;
 
-  // query the root server
-  bool sent = send_packet(query);
-  if (!sent) {
-    return std::nullopt;
-  }
+  while (max_hops--) {
+    if (!send_packet(query))
+      return std::nullopt;
 
-  auto packet = receive_packet();
-  if (!packet) {
-    return std::nullopt;
-  }
-
-  auto response = *packet;
-  size_t offset = 0;
-
-  DnsHeader reply_header = DnsHeader::from_bytes(response, offset);
-
-  int response_code = reply_header.flags & 0x0F;
-  if (reply_header.ancount == 0 || response_code == 3) {
-    std::println(stderr, "no ip address found/doesn't exist for: {}",
-                 domain_name);
-    return std::nullopt;
-  }
-
-  if (response_code != 0) {
-    std::println(stderr, "query not successful");
-    return std::nullopt;
-  }
-
-  // skip the question section (echoed back)
-  offset = query.size();
-
-  // root server should have no answers
-  assert(reply_header.ancount == 0);
-
-  // skip the authority section (its just names(strings))
-  for (int i{}; i < reply_header.nscount; i++) {
-    skip_name(response, offset);
-
-    DnsRecordHeader record_header =
-        DnsRecordHeader::from_bytes(response, offset);
-
-    offset += record_header.data_length;
-  }
-
-  // root server should give namespace server ips in this section
-  assert(reply_header.arcount > 0);
-
-  // just get first namespace server ipv4
-  Ipv4Addr ipv4;
-  for (int i{}; i < reply_header.arcount; i++) {
-    DnsRecordHeader record_header = DnsRecordHeader::from_bytes(response, offset);
-
-    if (record_header.type == 1) {
-      // found the ipv4
-      ipv4 = Ipv4Addr {
-        response[offset],
-        response[offset+1],
-        response[offset+2],
-        response[offset+3],
-      };
-      break;
+    auto packet_opt = receive_packet();
+    if (!packet_opt) {
+      return std::nullopt;
     }
+
+    auto response = *packet_opt;
+    size_t offset = 0;
+
+    DnsHeader reply_header = DnsHeader::from_bytes(response, offset);
+    int response_code = reply_header.flags & 0x0F;
+    if (response_code != 0) {
+      std::println(stderr, "query failed with response code: {}",
+                   response_code);
+      return std::nullopt;
+    }
+
+    // skip the echoed part
+    offset = query.size();
+
+    // answer section
+    for (int i{}; i < reply_header.ancount; i++) {
+      skip_name(response, offset);
+
+      DnsRecordHeader record_header =
+          DnsRecordHeader::from_bytes(response, offset);
+
+      if (record_header.type == 1) {
+        return Ipv4Addr{
+            response[offset],
+            response[offset + 1],
+            response[offset + 2],
+            response[offset + 3],
+        };
+      } else if (record_header.type == 28) {
+        return Ipv6Addr{
+            response[offset],      response[offset + 1],  response[offset + 2],
+            response[offset + 3],  response[offset + 4],  response[offset + 5],
+            response[offset + 6],  response[offset + 7],  response[offset + 8],
+            response[offset + 9],  response[offset + 10], response[offset + 11],
+            response[offset + 12], response[offset + 13], response[offset + 14],
+            response[offset + 15],
+        };
+      }
+
+      // skip everything else
+      offset += record_header.data_length;
+    }
+
+    // authority section, jusk skip the names
+    for (int i{}; i < reply_header.nscount; i++) {
+      skip_name(response, offset);
+
+      DnsRecordHeader record_header =
+          DnsRecordHeader::from_bytes(response, offset);
+
+      offset += record_header.data_length;
+    }
+
+    // additional section
+    bool ip_found = false;
+    for (int i{}; i < reply_header.arcount; i++) {
+      skip_name(response, offset);
+
+      DnsRecordHeader record_header =
+          DnsRecordHeader::from_bytes(response, offset);
+
+      // found ipv4 for next hop
+      if (record_header.type == 1) {
+        ip_found = true;
+
+        auto ip = Ipv4Addr{
+            response[offset],
+            response[offset + 1],
+            response[offset + 2],
+            response[offset + 3],
+        };
+
+        uint32_t raw_ip = ip.raw();
+        m_server_addr.sin_addr.s_addr = htonl(raw_ip);
+
+        std::println("jumping to new server: {}", ip.to_string());
+        break;
+      }
+
+      // try the next header for ip
+      offset += record_header.data_length;
+    }
+
+    if (ip_found) {
+      continue;
+    }
+
+    std::println(stderr, "resolution failed. no ip found");
+    return std::nullopt;
   }
+
+  std::println(stderr, "resolution failed. max hops reached");
+  return std::nullopt;
 }
 
 std::optional<DnsClient> DnsClient::create_old(std::string_view server_ip) {
