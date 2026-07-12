@@ -24,6 +24,11 @@ target_include_directories(
     PRIVATE ${PROJECT_SOURCE_DIR}/include
 )
 
+include(GNUInstallDirs)
+install(TARGETS locus
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
 # testing
 option(BUILD_TESTS "Build the test suite and fetch GTest" OFF)
 

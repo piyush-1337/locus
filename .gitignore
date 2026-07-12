@@ -1,2 +1,5 @@
 build/
 .cache
+result
+.direnv
+compile_commands.json
